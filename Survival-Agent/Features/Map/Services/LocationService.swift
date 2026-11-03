@@ -4,7 +4,7 @@ import Combine
 final class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
     @Published var location: CLLocation?
     @Published var heading: CLHeading?
-    @Published var authrisationStatus: CLAuthorizationStatus = .notDetermined
+    @Published var authorizationStatus: CLAuthorizationStatus = .notDetermined
     @Published var errorMessage: String?
     
     private let manager = CLLocationManager()
@@ -14,26 +14,60 @@ final class LocationService: NSObject, ObservableObject, CLLocationManagerDelega
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyBest
         manager.distanceFilter = 10
-        authrisationStatus = manager.authorizationStatus
+        authorizationStatus = manager.authorizationStatus
     }
     
     func start() {
-        manager.requestWhenInUseAuthorization()
-        manager.startUpdatingLocation()
-        manager.stopUpdatingHeading()
+        authorizationStatus = manager.authorizationStatus
+
+        switch authorizationStatus {
+        case .notDetermined:
+            manager.requestWhenInUseAuthorization()
+
+        case .authorizedWhenInUse, .authorizedAlways:
+            manager.startUpdatingLocation()
+
+            if CLLocationManager.headingAvailable() {
+                manager.startUpdatingHeading()
+            }
+
+        case .denied, .restricted:
+            manager.stopUpdatingLocation()
+            manager.stopUpdatingHeading()
+
+        @unknown default:
+            break
+        }
     }
     
     func requestLocation() {
         manager.requestLocation()
     }
     
-    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        authrisationStatus = manager.authorizationStatus
-        
-        if manager.authorizationStatus == .authorizedWhenInUse ||
-            manager.authorizationStatus == .authorizedAlways {
+    func locationManagerDidChangeAuthorization(
+        _ manager: CLLocationManager
+    ) {
+        authorizationStatus = manager.authorizationStatus
+
+        switch authorizationStatus {
+        case .authorizedWhenInUse, .authorizedAlways:
             manager.startUpdatingLocation()
-            manager.startUpdatingHeading()
+
+            if CLLocationManager.headingAvailable() {
+                manager.startUpdatingHeading()
+            }
+
+            errorMessage = nil
+
+        case .denied, .restricted:
+            manager.stopUpdatingLocation()
+            manager.stopUpdatingHeading()
+
+        case .notDetermined:
+            break
+
+        @unknown default:
+            break
         }
     }
     
